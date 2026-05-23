@@ -1,10 +1,10 @@
 ---
 name: "r-btw"
 displayName: "R Interactive Session"
-description: "Connect Kiro to a live R session via btw and mcptools — explore data frames, read package documentation, run package checks, and work with your R environment in real time. Prefers data.table for data manipulation. Includes targets pipeline support. v2.1.0"
+description: "Connect Kiro to a live R session via btw and mcptools — explore data frames, read package documentation, run package checks, and work with your R environment in real time. Prefers data.table for data manipulation. Includes targets pipeline support. v2.2.0"
 keywords: ["R", "rstats", "data.table", "tidyverse", "ggplot", "dplyr", "data frame", "dataframe", "fread", "fwrite", "DT", "targets", "tar_make", "tar_read", "tar_load", "pipeline", "tarchetypes", "renv", "devtools", "testthat", "quarto", "Rscript", "posit", "RStudio", "CRAN", "package", "ellmer", "btw", "mcptools", "plotly"]
 author: "Russell Politzky"
-version: "2.1.0"
+version: "2.2.0"
 icon: "icon.svg"
 ---
 

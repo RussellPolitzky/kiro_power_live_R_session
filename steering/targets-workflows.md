@@ -198,6 +198,99 @@ permanently.
 
 ---
 
+## `tar_target()` Formatting Conventions
+
+**Always follow this exact style when writing `tar_target()` calls.**
+Consistency is critical because the targets outline provider parses
+these comments to build a hierarchical navigation tree of the pipeline.
+
+### Required format
+
+```r
+  tar_target( #tgt target_name
+    name      = target_name,
+    command   = some_function(arg1, arg2),
+    pattern   = map(arg1),       # only if dynamic branching
+    iteration = "list"           # only if needed
+  ),
+```
+
+Rules:
+1. **Always use named arguments** for `name` and `command` — never
+   positional. Other arguments (`pattern`, `format`, `iteration`, etc.)
+   must also be named.
+2. **Align `=` signs** across all arguments using spaces.
+3. **Opening comment `#tgt`** on the same line as `tar_target(` — this
+   is the outline marker. The text after `#tgt` is the label shown in
+   the outline navigator.
+4. **One target per call** — never combine multiple targets into one.
+5. **No inline function definitions** in `command` — all functions live
+   in `R/` and are loaded via `tar_source()`.
+
+### Outline hierarchy with `#tgt`
+
+The `#tgt` comment drives the hierarchical outline. Depth is controlled
+by the number of `#` characters after the initial `#`:
+
+```r
+  tar_target( #tgt data_ingest          # Level 1 — top-level section
+    name    = raw_data,
+    command = load_raw_data(raw_file)
+  ),
+
+  tar_target( ##tgt clean               # Level 2 — subsection
+    name    = clean_data,
+    command = clean_raw(raw_data)
+  ),
+
+  tar_target( ###tgt derive_features    # Level 3 — nested subsection
+    name    = features,
+    command = make_features(clean_data)
+  ),
+```
+
+Use hierarchy to group related targets logically — e.g. all data
+ingestion targets under a Level 1 `#tgt ingest`, all modelling targets
+under `#tgt model`, all reporting targets under `#tgt report`.
+
+### Full example
+
+```r
+list(
+
+  tar_target( #tgt ingest
+    name    = raw_file,
+    command = "data/input.csv",
+    format  = "file"
+  ),
+
+  tar_target( ##tgt load
+    name    = raw_data,
+    command = fread(raw_file)
+  ),
+
+  tar_target( ##tgt clean
+    name    = clean_data,
+    command = clean_raw(raw_data)
+  ),
+
+  tar_target( #tgt model
+    name      = row_ids,
+    command   = get_row_ids(clean_data)
+  ),
+
+  tar_target( ##tgt charts
+    name      = charts,
+    command   = make_chart(params_df, row_ids),
+    pattern   = map(row_ids),
+    iteration = "list"
+  )
+
+)
+```
+
+---
+
 ## Standard `_targets.R` Template
 
 ```r
@@ -215,26 +308,37 @@ tar_option_set(
 tar_source()   # sources all R/*.R files
 
 list(
-  # Track a raw data file — reruns downstream if the file changes
-  tar_target(raw_file, "data/input.csv", format = "file"),
 
-  # Load and clean using data.table
-  tar_target(raw_data, {
-    DT <- fread(raw_file)
-    DT[!is.na(key_col)]
-  }),
+  tar_target( #tgt ingest
+    name    = raw_file,
+    command = "data/input.csv",
+    format  = "file"
+  ),
 
-  tar_target(clean_data, {
-    DT <- copy(raw_data)
-    DT[, derived := col_a * col_b]
-    setkey(DT, id)
-    DT
-  }),
+  tar_target( ##tgt load
+    name    = raw_data,
+    command = fread(raw_file)
+  ),
 
-  tar_target(model_fit, fit_model(clean_data)),
+  tar_target( ##tgt clean
+    name    = clean_data,
+    command = {
+      DT <- copy(raw_data)
+      DT[!is.na(key_col)]
+      DT[, derived := col_a * col_b]
+      setkey(DT, id)
+      DT
+    }
+  ),
+
+  tar_target( #tgt model
+    name    = model_fit,
+    command = fit_model(clean_data)
+  ),
 
   # Quarto report — reruns if model_fit or the .qmd file changes
   tarchetypes::tar_quarto(report, "report.qmd")
+
 )
 ```
 
