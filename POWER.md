@@ -1,10 +1,10 @@
 ---
 name: "r-btw"
 displayName: "R Interactive Session"
-description: "Connect Kiro to a live R session via btw and mcptools — explore data frames, read package documentation, run package checks, and work with your R environment in real time. Prefers data.table for data manipulation. Includes targets pipeline support. v2.0.0"
+description: "Connect Kiro to a live R session via btw and mcptools — explore data frames, read package documentation, run package checks, and work with your R environment in real time. Prefers data.table for data manipulation. Includes targets pipeline support. v2.1.0"
 keywords: ["R", "rstats", "data.table", "tidyverse", "ggplot", "dplyr", "data frame", "dataframe", "fread", "fwrite", "DT", "targets", "tar_make", "tar_read", "tar_load", "pipeline", "tarchetypes", "renv", "devtools", "testthat", "quarto", "Rscript", "posit", "RStudio", "CRAN", "package", "ellmer", "btw", "mcptools", "plotly"]
 author: "Russell Politzky"
-version: "2.0.0"
+version: "2.1.0"
 icon: "icon.svg"
 ---
 
@@ -162,25 +162,176 @@ already be open and the MCP server for R must be running before you
 register the session. If you register before the server is up, the
 connection will fail silently.
 
-This Power includes a session registration script,
-`expose_session_as_mcp.R`, which handles registration, applies a
-required serialization patch (see [Known Issues](#known-issues)), and
-starts the local plotly rendering server.
+Registration uses the `expose_session_as_mcp.R` script, which handles
+session registration, applies a required serialization patch (see
+[Known Issues](#known-issues)), and starts the local plotly rendering
+server.
 
-**Correct startup order:**
+**Kiro: write the script to disk during onboarding**
+
+The script is embedded below. Use `btw_tool_files_write` to write it to
+the user's home directory as `expose_session_as_mcp.R`, then instruct
+the user to source it from there. This approach works without any
+internet access.
+
+Target path:
+- **Mac/Linux:** `~/expose_session_as_mcp.R`
+- **Windows:** `C:/Users/<username>/expose_session_as_mcp.R`
+
+```r
+# =============================================================================
+# Expose the current R session as an MCP server for use with Kiro/btw.
+#
+# Usage:
+#   source("~/expose_session_as_mcp.R")
+#
+#   This must be sourced after Kiro has been started and the r-btw MCP
+#   server is active in the Kiro MCP panel.
+#
+# This will:
+#   1. Install mcptools and btw if not already present.
+#   2. Start (or restart) an MCP session.
+#   3. Apply a monkey-patch to fix S7 serialization errors when
+#      btw_tool_run_r returns plots (ContentImageInline).
+#   4. Start a local HTTP server for plotly widget rendering.
+#      Use show_plotly(p) to display a plotly plot as a static PNG
+#      via the Playwright MCP server.
+#
+# Upstream issue: https://github.com/posit-dev/mcptools/issues/96
+# =============================================================================
+
+expose_mcp_session <- function() {
+
+  ensure_dependencies <- function() {
+    if (!requireNamespace("mcptools", quietly = TRUE)) {
+      message("Installing mcptools...")
+      install.packages("mcptools")
+    }
+    if (!requireNamespace("btw", quietly = TRUE)) {
+      message("Installing btw...")
+      install.packages("btw")
+    }
+    if (!requireNamespace("servr", quietly = TRUE)) {
+      message("Installing servr...")
+      install.packages("servr")
+    }
+    if (!requireNamespace("png", quietly = TRUE)) {
+      message("Installing png...")
+      install.packages("png")
+    }
+  }
+
+  start_mcp_session <- function() {
+    tryCatch(close(mcptools:::the$session_socket), error = function(e) NULL)
+    mcptools::mcp_session()
+  }
+
+  fix_plot_serialization <- function() {
+    # mcptools::as_tool_call_result() calls jsonlite::toJSON() on tool results
+    # containing S7 ContentImageInline objects. jsonlite can't serialize S7,
+    # causing: "No method asJSON S3 class: S7_object".
+    #
+    # Fix: Replace as_tool_call_result with a version that converts S7 Content
+    # objects to plain lists before serialization.
+
+    patched_as_tool_call_result <- function(data, result) {
+      is_error <- FALSE
+
+      if (inherits(result, "ellmer::ContentToolResult")) {
+        is_error <- !is.null(result@error)
+
+        content_list <- lapply(result@value, function(item) {
+          if (inherits(item, "ellmer::ContentImageInline")) {
+            list(type = "image", mimeType = item@type, data = item@data)
+          } else if (inherits(item, "ellmer::ContentText")) {
+            list(type = "text", text = item@text)
+          } else if (is.character(item)) {
+            list(type = "text", text = paste(item, collapse = "\n"))
+          } else {
+            list(type = "text", text = format(item))
+          }
+        })
+
+        mcptools:::jsonrpc_response(
+          data$id,
+          list(content = content_list, isError = is_error)
+        )
+      } else {
+        mcptools:::jsonrpc_response(
+          data$id,
+          list(
+            content = list(list(type = "text", text = paste(result, collapse = "\n"))),
+            isError = is_error
+          )
+        )
+      }
+    }
+
+    assignInNamespace(
+      "as_tool_call_result",
+      patched_as_tool_call_result,
+      ns = "mcptools"
+    )
+  }
+
+  start_plotly_server <- function() {
+    # Start a local HTTP server to serve plotly HTML widgets.
+    # The Playwright MCP server can then navigate to these and screenshot them.
+    plotly_dir <- file.path(tempdir(), "plotly_mcp")
+    dir.create(plotly_dir, showWarnings = FALSE, recursive = TRUE)
+
+    port <- httpuv::randomPort()
+    servr::httd(dir = plotly_dir, port = port, browser = FALSE, daemon = TRUE)
+
+    # Store in global env for use by show_plotly()
+    assign(".plotly_mcp_dir",  plotly_dir, envir = .GlobalEnv)
+    assign(".plotly_mcp_port", port,       envir = .GlobalEnv)
+
+    message("Plotly server running at http://127.0.0.1:", port)
+  }
+
+  ensure_dependencies()
+  start_mcp_session()
+  fix_plot_serialization()
+  start_plotly_server()
+
+  message("MCP session started with plot serialization fix and plotly server.")
+  invisible(TRUE)
+}
+
+
+#' Display a plotly plot as a static PNG via the Playwright MCP server.
+#'
+#' Saves the plotly widget as HTML, serves it locally, and returns the URL
+#' for Playwright to screenshot. Call this from btw_tool_run_r, then use
+#' Playwright's browser_navigate + browser_take_screenshot tools.
+#'
+#' @param p A plotly object.
+#' @param filename Optional filename (without path). Defaults to "plotly_widget.html".
+#' @return The local URL to navigate to with Playwright.
+#' @examples
+#' # In btw_tool_run_r:
+#' url <- show_plotly(p)
+#' # Then Kiro uses: browser_navigate(url) + browser_take_screenshot()
+show_plotly <- function(p, filename = "plotly_widget.html") {
+  htmlwidgets::saveWidget(p, file.path(.plotly_mcp_dir, filename), selfcontained = TRUE)
+  url <- paste0("http://127.0.0.1:", .plotly_mcp_port, "/", filename)
+  message("Plotly saved. Navigate Playwright to: ", url)
+  url
+}
+
+
+expose_mcp_session()
+```
+
+**Correct startup order after the script has been written:**
 1. Open Kiro
 2. Confirm the `r-btw` MCP server is active (check the MCP panel)
 3. Start your interactive R session (RStudio, Positron, or terminal)
-4. Source the registration script from the Power's installed location:
+4. Source the script:
 
-**Mac/Linux:**
 ```r
-source("~/.kiro/powers/installed/r-btw/expose_session_as_mcp.R")
-```
-
-**Windows:**
-```r
-source("C:/Users/<YourUsername>/.kiro/powers/installed/r-btw/expose_session_as_mcp.R")
+source("~/expose_session_as_mcp.R")
 ```
 
 If you start R before Kiro is open, or before the MCP server is
@@ -219,7 +370,7 @@ by default via `btw_mcp_server()`.
 ### `env` — R environment inspection
 - Describe data frames (structure, column types, summary statistics, sample rows)
 - Describe all objects in the global environment
-- Requires `expose_session_as_mcp.R` to have been sourced in the target R session
+- Requires `expose_session_as_mcp.R` to have been sourced in the target R session (Kiro writes this during onboarding)
 
 ### `files` — File operations
 - Read, write, search, and list project files
