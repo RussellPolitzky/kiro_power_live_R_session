@@ -6,6 +6,7 @@ keywords: ["R", "rstats", "data.table", "tidyverse", "ggplot", "dplyr", "data fr
 author: "Russell Politzky"
 version: "2.3.0"
 icon: "icon.svg"
+repository: "https://github.com/RussellPolitzky/kiro_power_live_R_session"
 ---
 
 # R Interactive Session (btw + mcptools)
