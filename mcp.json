@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "r-btw": {
+      "command": "Rscript",
+      "args": ["-e", "btw::btw_mcp_server()"],
+      "env": {
+        "BTW_RUN_R_ENABLED": "true"
+      },
+      "autoApprove": [
+        "btw_tool_docs_package_help_topics",
+        "btw_tool_docs_help_page",
+        "btw_tool_run_r",
+        "btw_tool_files_list",
+        "btw_tool_files_read",
+        "btw_tool_pkg_test",
+        "list_r_sessions",
+        "select_r_session",
+        "btw_tool_env_describe_environment"
+      ]
+    }
+  }
+}
