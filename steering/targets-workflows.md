@@ -30,12 +30,15 @@ project/
 │   ├── meta/           # metadata and dependency hashes
 │   └── objects/        # serialised target outputs
 └── R/
-    └── functions.R     # user-defined functions sourced by tar_source()
+    ├── clean_raw.R     # one file per function, named after the function
+    ├── fit_model.R
+    └── make_chart.R
 ```
 
 `_targets.R` is the single entry point. It must end with a `list()` of
-`tar_target()` calls. Keep function definitions in `R/` and load them
-with `tar_source()` — do not define functions inline in `_targets.R`.
+`tar_target()` calls. Keep function definitions in `R/` with one
+function per file — do not define functions inline in `_targets.R` and
+do not group multiple functions into a single file.
 
 ---
 
@@ -289,9 +292,32 @@ list(
 )
 ```
 
----
+## Function File Organisation
 
-## Standard `_targets.R` Template
+**Each function must live in its own file.** The filename must match the
+function name exactly.
+
+```
+R/
+├── clean_raw.R
+├── fit_model.R
+├── make_chart.R
+├── get_row_ids.R
+└── load_raw_data.R
+```
+
+Rules:
+- One function per file — never group multiple functions in one file
+- Filename = function name + `.R` extension, e.g. `make_chart` → `make_chart.R`
+- All files in `R/` are loaded automatically by `tar_source()` in `_targets.R`
+- When creating a new target that calls a new function, create the
+  corresponding `R/<function_name>.R` file at the same time
+
+This makes it easy to find, diff, and review individual functions, and
+keeps the git history clean — a change to `make_chart()` shows up as a
+change to `R/make_chart.R`, not buried in a monolithic `functions.R`.
+
+---
 
 ```r
 # _targets.R
