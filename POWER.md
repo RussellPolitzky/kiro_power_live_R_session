@@ -1,10 +1,10 @@
 ---
 name: "r-btw"
 displayName: "R Interactive Session"
-description: "Connect Kiro to a live R session via btw and mcptools — explore data frames, read package documentation, run package checks, and work with your R environment in real time. Prefers data.table for data manipulation. Includes targets pipeline support. v2.3.0"
+description: "Connect Kiro to a live R session via btw and mcptools — explore data frames, read package documentation, run package checks, and work with your R environment in real time. Prefers data.table for data manipulation. Includes targets pipeline support. v2.4.0"
 keywords: ["R", "rstats", "data.table", "tidyverse", "ggplot", "dplyr", "data frame", "dataframe", "fread", "fwrite", "DT", "targets", "tar_make", "tar_read", "tar_load", "pipeline", "tarchetypes", "renv", "devtools", "testthat", "quarto", "Rscript", "posit", "RStudio", "CRAN", "package", "ellmer", "btw", "mcptools", "plotly"]
 author: "Russell Politzky"
-version: "2.3.0"
+version: "2.4.0"
 icon: "icon.svg"
 repository: "https://github.com/RussellPolitzky/kiro_power_live_R_session"
 ---
@@ -103,39 +103,40 @@ packageVersion("data.table")
 packageVersion("targets")
 ```
 
-### Step 2: Verify Rscript is on PATH
+### Step 2: Verify Rscript is reachable
 
-In a terminal:
+**On Windows, Kiro must verify Rscript is reachable before anything
+else. If it is not, the MCP server will silently fail to start.**
+
+**Kiro: run this check proactively on first use on Windows:**
 
 ```bash
 Rscript --version
 ```
 
-If this succeeds, the `mcp.json` will work as-is. If it fails, follow
-the steps below.
+**If the command succeeds** — Rscript is on PATH and `mcp.json` will
+work as-is. Proceed to Step 3.
 
-#### Windows: Rscript not found
+**If the command fails or is not found**, Kiro must immediately:
 
-When Kiro installs this Power it registers the MCP server in
-`%USERPROFILE%\.kiro\settings\mcp.json` using `"Rscript"` as the
-command. On Windows, `Rscript` is often not on PATH and the server will
-fail to start.
+1. Search for Rscript in the most common Windows install locations:
+```bash
+where Rscript
+```
+And check these paths if `where` fails:
+- `C:/Program Files/R/` — list subdirectories to find the installed version
+- `C:/Users/<username>/AppData/Local/Programs/R/`
 
-**Fix option 1 — Add R to PATH (recommended, fixes all R tooling)**
-1. Open **Start → Edit the system environment variables**
-2. Under **System variables**, select **Path → Edit**
-3. Add the R bin folder, e.g. `C:\Program Files\R\R-4.5.1\bin`
-4. Restart Kiro
+2. If found, note the full path (e.g. `C:/Program Files/R/R-4.5.1/bin/Rscript.exe`)
 
-**Fix option 2 — Update mcp.json with the full Rscript path**
-
-If the MCP server fails to start, Kiro should:
-1. Ask the user: *"Rscript doesn't appear to be on PATH. Please provide
-   the full path to Rscript.exe on your machine
+3. If not found automatically, ask the user:
+   *"Rscript.exe could not be found automatically. Please provide the
+   full path to Rscript.exe on your machine
    (e.g. `C:/Program Files/R/R-4.5.1/bin/Rscript.exe`)."*
-2. Open `%USERPROFILE%\.kiro\settings\mcp.json`
-3. Find the `power-r-btw-r-btw` entry and replace the `command` value
-   with the path the user provided. Forward slashes work fine on Windows:
+
+4. Open `%USERPROFILE%\.kiro\settings\mcp.json`, find the
+   `power-r-btw-r-btw` entry, and update the `command` field with
+   the full path. Forward slashes work fine on Windows:
 
 ```json
 {
@@ -151,7 +152,14 @@ If the MCP server fails to start, Kiro should:
 }
 ```
 
-4. Save the file and restart the MCP server from the Kiro MCP panel.
+5. Save the file and ask the user to restart the MCP server from the
+   Kiro MCP panel before continuing.
+
+**Alternative: Add R to PATH permanently (recommended)**
+1. Open **Start → Edit the system environment variables**
+2. Under **System variables**, select **Path → Edit**
+3. Add the R bin folder, e.g. `C:\Program Files\R\R-4.5.1\bin`
+4. Restart Kiro — `mcp.json` will then work without modification
 
 > **WSL users:** See the WSL-specific guide at
 > https://github.com/posit-dev/mcptools/issues/41#issuecomment-3036617046
